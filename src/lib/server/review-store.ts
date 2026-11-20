@@ -57,41 +57,57 @@ export async function readImportedReviews(): Promise<Review[]> {
   }
 }
 
+function planMerge(existing: Review[], incoming: Review[]) {
+  const merged = new Map(existing.map((review) => [reviewKey(review), review]));
+  const seenInFile = new Set<string>();
+  let added = 0;
+  let updated = 0;
+  let duplicateRows = 0;
+
+  for (const review of incoming) {
+    const key = reviewKey(review);
+    if (seenInFile.has(key)) {
+      duplicateRows += 1;
+      continue;
+    }
+    seenInFile.add(key);
+
+    const current = merged.get(key);
+    merged.set(key, { ...review, id: current?.id ?? stableId(key), source: "import" });
+    if (current) updated += 1;
+    else added += 1;
+  }
+
+  return { records: [...merged.values()], added, updated, duplicateRows };
+}
+
+export async function previewImportedReviews(incoming: Review[]) {
+  const existing = await readImportedReviews();
+  const plan = planMerge(existing, incoming);
+  return {
+    added: plan.added,
+    updated: plan.updated,
+    duplicateRows: plan.duplicateRows,
+    total: plan.records.length,
+    rowsInFile: incoming.length,
+  };
+}
+
 export async function mergeImportedReviews(incoming: Review[]) {
   const lock = await acquireWriteLock();
   try {
     const existing = await readImportedReviews();
-    const merged = new Map(existing.map((review) => [reviewKey(review), review]));
-    const seenInFile = new Set<string>();
-    let added = 0;
-    let updated = 0;
-    let duplicateRows = 0;
-
-    for (const review of incoming) {
-      const key = reviewKey(review);
-      if (seenInFile.has(key)) {
-        duplicateRows += 1;
-        continue;
-      }
-      seenInFile.add(key);
-
-      const current = merged.get(key);
-      merged.set(key, { ...review, id: current?.id ?? stableId(key), source: "import" });
-      if (current) updated += 1;
-      else added += 1;
-    }
-
-    const records = [...merged.values()];
+    const plan = planMerge(existing, incoming);
     const temporaryFile = path.join(dataDirectory, `.imported-reviews-${randomUUID()}.tmp`);
     try {
-      await writeFile(temporaryFile, `${JSON.stringify(records, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      await writeFile(temporaryFile, `${JSON.stringify(plan.records, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
       await rename(temporaryFile, dataFile);
     } catch (error) {
       await rm(temporaryFile, { force: true });
       throw error;
     }
 
-    return { added, updated, duplicateRows, total: records.length };
+    return { added: plan.added, updated: plan.updated, duplicateRows: plan.duplicateRows, total: plan.records.length };
   } finally {
     await lock.close();
     await rm(lockFile, { force: true });

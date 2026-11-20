@@ -43,7 +43,7 @@ Import an authorized export:
 npm run reviews:import -- "./path/to/authorized-reviews.csv"
 ```
 
-Operations staff can also select **Import reviews** in the dashboard and upload the same CSV. The upload is limited to 5 MB. The app shows row-level validation errors and keeps the existing dataset unchanged if any row is invalid. The template can be downloaded from the import dialog.
+Operations staff can also select **Import reviews** in the dashboard and upload the same CSV. The upload is limited to 5 MB. The app shows a preview of new, updated, and duplicate rows before saving; row-level validation errors cancel the import and keep the existing dataset unchanged. The template can be downloaded from the import dialog.
 
 The importer validates the entire CSV before writing. Any invalid row cancels the import and reports its row number. It combines separate positive and negative text columns, skips duplicate rows within a file, and updates existing records when reimported. It identifies reviews by the source review ID when available, or by a SHA-256 fingerprint of property, date, rating, and normalized review text otherwise. Writes use a temporary file and atomic rename to avoid leaving a partial dataset after an interrupted write.
 

@@ -403,15 +403,17 @@ function InsightsView({ reviews, now, source }: { reviews: Review[]; now: Date; 
 }
 
 type ImportReport = { added: number; updated: number; duplicateRows: number; total: number };
+type ImportPreview = ImportReport & { rowsInFile: number; propertyCounts: Array<{ property: string; count: number }> };
 
 function ImportReviewsDialog({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [issues, setIssues] = useState<Array<{ row: number; message: string }>>([]);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
 
-  async function submitImport() {
+  async function submitImport(mode: "preview" | "commit") {
     if (!file) {
       setError("Choose a CSV file first.");
       return;
@@ -423,16 +425,21 @@ function ImportReviewsDialog({ onClose, onImported }: { onClose: () => void; onI
     try {
       const body = new FormData();
       body.append("file", file);
+      body.append("mode", mode);
       const response = await fetch("/api/reviews", { method: "POST", body });
-      const result = await response.json() as { error?: string; issues?: Array<{ row: number; message: string }>; report?: ImportReport };
-      if (!response.ok || !result.report) {
+      const result = await response.json() as { error?: string; issues?: Array<{ row: number; message: string }>; preview?: ImportPreview; report?: ImportReport };
+      const outcome = mode === "preview" ? result.preview : result.report;
+      if (!response.ok || !outcome) {
         setError(result.error ?? "The import could not be completed.");
         setIssues(result.issues ?? []);
         return;
       }
 
-      setReport(result.report);
-      await onImported();
+      if (mode === "preview") setPreview(result.preview ?? null);
+      else {
+        setReport(result.report ?? null);
+        await onImported();
+      }
     } catch {
       setError("Could not reach the local review service. Try again when the app is running.");
     } finally {
@@ -453,6 +460,18 @@ function ImportReviewsDialog({ onClose, onImported }: { onClose: () => void; onI
           <h3>Import complete</h3>
           <p>{report.added} added · {report.updated} updated · {report.duplicateRows} duplicate rows skipped</p>
           <button className="import-primary" onClick={onClose}>Done</button>
+        </div> : preview ? <div className="import-preview">
+          <span className="small-label">IMPORT PREVIEW</span>
+          <h3>{preview.rowsInFile} rows checked</h3>
+          <p className="preview-note">No data has been changed yet. Existing reviews not included in this file will be kept.</p>
+          <div className="preview-stats">
+            <div><strong>{preview.added}</strong><span>New</span></div>
+            <div><strong>{preview.updated}</strong><span>Updates</span></div>
+            <div><strong>{preview.duplicateRows}</strong><span>Duplicates skipped</span></div>
+          </div>
+          <div className="preview-properties"><span className="small-label">ROWS BY PROPERTY</span>{preview.propertyCounts.map((item) => <div key={item.property}><span>{item.property}</span><strong>{item.count}</strong></div>)}</div>
+          {error && <div className="import-error" role="alert">{error}</div>}
+          <div className="dialog-actions"><button className="import-secondary" onClick={() => { setPreview(null); setError(""); }} disabled={busy}>Back</button><button className="import-primary" onClick={() => submitImport("commit")} disabled={busy}>{busy ? "Saving reviews…" : "Confirm import"}</button></div>
         </div> : <>
           <label className={`upload-dropzone ${file ? "has-file" : ""}`} htmlFor="review-csv-file">
             <span className="upload-icon"><Upload size={19} /></span>
@@ -463,7 +482,7 @@ function ImportReviewsDialog({ onClose, onImported }: { onClose: () => void; onI
           <a className="template-download" href="/api/review-template"><FileSpreadsheet size={14} /> Download the CSV template</a>
           <p className="import-guidance">The file is checked before it is saved. If any row is invalid, the import is cancelled and existing data stays unchanged.</p>
           {error && <div className="import-error" role="alert"><strong>{error}</strong>{issues.length > 0 && <ul>{issues.slice(0, 8).map((issue, index) => <li key={`${issue.row}-${index}`}>Row {issue.row}: {issue.message}</li>)}</ul>}</div>}
-          <div className="dialog-actions"><button className="import-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="import-primary" onClick={submitImport} disabled={busy || !file}>{busy ? "Checking file…" : "Import reviews"}</button></div>
+          <div className="dialog-actions"><button className="import-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="import-primary" onClick={() => submitImport("preview")} disabled={busy || !file}>{busy ? "Checking file…" : "Preview import"}</button></div>
         </>}
       </section>
     </div>

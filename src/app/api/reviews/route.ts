@@ -1,5 +1,6 @@
 import { parse } from "csv-parse/sync";
-import { mergeImportedReviews, readImportedReviews } from "@/lib/server/review-store";
+import { properties } from "@/data/properties";
+import { mergeImportedReviews, previewImportedReviews, readImportedReviews } from "@/lib/server/review-store";
 import { normalizeCsvRows } from "@/lib/validations/import";
 
 const maximumUploadBytes = 5 * 1024 * 1024;
@@ -30,6 +31,8 @@ export async function POST(request: Request) {
   }
 
   const file = formData.get("file");
+  const mode = formData.get("mode");
+  if (mode !== "preview" && mode !== "commit") return Response.json({ error: "Choose whether to preview or confirm the import." }, { status: 400 });
   if (!(file instanceof File)) return Response.json({ error: "A CSV file is required." }, { status: 400 });
   if (!file.name.toLowerCase().endsWith(".csv")) return Response.json({ error: "Choose a file with a .csv extension." }, { status: 415 });
   if (file.size > maximumUploadBytes) return Response.json({ error: "The CSV must be 5 MB or smaller." }, { status: 413 });
@@ -56,6 +59,22 @@ export async function POST(request: Request) {
       issues: result.issues.slice(0, 50),
       totalIssues: result.issues.length,
     }, { status: 422 });
+  }
+
+  if (mode === "preview") {
+    try {
+      const preview = await previewImportedReviews(result.reviews);
+      const rowsByProperty = new Map<string, number>();
+      for (const review of result.reviews) rowsByProperty.set(review.propertyId, (rowsByProperty.get(review.propertyId) ?? 0) + 1);
+      const propertyCounts = Array.from(rowsByProperty, ([propertyId, count]) => ({
+        property: properties.find((property) => property.id === propertyId)?.name ?? propertyId,
+        count,
+      }));
+      return Response.json({ preview: { ...preview, propertyCounts } });
+    } catch (error) {
+      console.error("Could not preview review import", error);
+      return Response.json({ error: "Could not compare the CSV with the saved review data." }, { status: 500 });
+    }
   }
 
   try {
