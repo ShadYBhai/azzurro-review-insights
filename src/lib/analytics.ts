@@ -38,7 +38,7 @@ function addDays(dateKey: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function getWeekRanges(now = new Date()) {
+export function getWeekRanges(now: Date) {
   const today = dateKeyInSydney(now);
   const weekday = new Date(`${today}T00:00:00.000Z`).getUTCDay();
   const daysSinceMonday = (weekday + 6) % 7;
@@ -51,12 +51,34 @@ export function getWeekRanges(now = new Date()) {
   };
 }
 
+export function getWeeklySentimentTrend(reviews: Review[], weeks: number, now: Date) {
+  const { current } = getWeekRanges(now);
+
+  return Array.from({ length: weeks }, (_, index) => {
+    const start = addDays(current.start, -7 * (weeks - index - 1));
+    const end = addDays(start, 6);
+    const weeklyReviews = reviews.filter((review) => review.date >= start && review.date <= end);
+    const positive = weeklyReviews.filter((review) => getSentiment(review.rating) === "positive").length;
+    const negative = weeklyReviews.filter((review) => getSentiment(review.rating) === "negative").length;
+    const labelDate = new Date(`${start}T12:00:00.000Z`);
+
+    return {
+      start,
+      end,
+      label: new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Sydney", day: "numeric", month: "short" }).format(labelDate),
+      positiveShare: weeklyReviews.length ? (positive / weeklyReviews.length) * 100 : 0,
+      negativeShare: weeklyReviews.length ? (negative / weeklyReviews.length) * 100 : 0,
+      reviewCount: weeklyReviews.length,
+    };
+  });
+}
+
 function averageRating(reviews: Review[]): number | null {
   if (reviews.length === 0) return null;
   return reviews.reduce((total, review) => total + review.rating, 0) / reviews.length;
 }
 
-export function getWeeklySummary(reviews: Review[], now = new Date()) {
+export function getWeeklySummary(reviews: Review[], now: Date) {
   const ranges = getWeekRanges(now);
   const current = reviews.filter((review) => review.date >= ranges.current.start && review.date <= ranges.current.end);
   const previous = reviews.filter((review) => review.date >= ranges.previous.start && review.date <= ranges.previous.end);
@@ -75,8 +97,8 @@ export function getWeeklySummary(reviews: Review[], now = new Date()) {
   };
 }
 
-export function getPropertyWeeklyRatings(reviews: Review[], now = new Date()) {
-  const { ranges } = getWeekRanges(now);
+export function getPropertyWeeklyRatings(reviews: Review[], now: Date) {
+  const ranges = getWeekRanges(now);
 
   return new Map(
     Array.from(new Set(reviews.map((review) => review.propertyId))).map((propertyId) => {

@@ -1,20 +1,13 @@
 import type { Review } from "@/lib/types";
 
-function daysAgo(days: number): string {
-  const date = new Date();
-  date.setUTCHours(12, 0, 0, 0);
-  date.setUTCDate(date.getUTCDate() - days);
-  return date.toISOString().slice(0, 10);
-}
-
 // Fictional fixtures for the interface only; these are not Booking.com reviews.
-export const demoReviews: Review[] = [
+const demoReviewSeeds: Array<Omit<Review, "date"> & { daysAgo: number }> = [
   {
     id: "demo-001",
     propertyId: "olympic-paddington",
     guest: "Taylor",
     country: "Australia",
-    date: daysAgo(2),
+    daysAgo: 2,
     rating: 9.1,
     title: "A comfortable stay",
     text: "The room was spotless and the bed was very comfortable. Staff made check-in easy.",
@@ -27,7 +20,7 @@ export const demoReviews: Review[] = [
     propertyId: "olympic-paddington",
     guest: "Jordan",
     country: "New Zealand",
-    date: daysAgo(5),
+    daysAgo: 5,
     rating: 6.2,
     title: "Good location, some street noise",
     text: "Easy to get around from here, but traffic noise carried into our room late at night.",
@@ -40,7 +33,7 @@ export const demoReviews: Review[] = [
     propertyId: "olympic-paddington",
     guest: "Morgan",
     country: "United Kingdom",
-    date: daysAgo(9),
+    daysAgo: 9,
     rating: 7.6,
     title: "Convenient for a short visit",
     text: "The location was convenient and the room was tidy. The bathroom could use an update.",
@@ -53,7 +46,7 @@ export const demoReviews: Review[] = [
     propertyId: "olympic-paddington",
     guest: "Casey",
     country: "Singapore",
-    date: daysAgo(15),
+    daysAgo: 15,
     rating: 5.6,
     title: "Room needed more attention",
     text: "There was dust around the room and the shower needed a more thorough clean.",
@@ -66,7 +59,7 @@ export const demoReviews: Review[] = [
     propertyId: "potts-point",
     guest: "Riley",
     country: "Australia",
-    date: daysAgo(1),
+    daysAgo: 1,
     rating: 8.8,
     title: "Helpful team and great neighbourhood",
     text: "Reception were friendly and gave us useful tips. Lots of cafes within a short walk.",
@@ -79,7 +72,7 @@ export const demoReviews: Review[] = [
     propertyId: "potts-point",
     guest: "Jamie",
     country: "United States",
-    date: daysAgo(6),
+    daysAgo: 6,
     rating: 6.4,
     title: "A little noisy at night",
     text: "The room was comfortable, though voices from the hallway made it hard to sleep.",
@@ -92,7 +85,7 @@ export const demoReviews: Review[] = [
     propertyId: "potts-point",
     guest: "Alex",
     country: "India",
-    date: daysAgo(10),
+    daysAgo: 10,
     rating: 9.3,
     title: "Smooth arrival",
     text: "Check-in was quick after a long flight and the receptionist helped us with our bags.",
@@ -105,7 +98,7 @@ export const demoReviews: Review[] = [
     propertyId: "potts-point",
     guest: "Sam",
     country: "Canada",
-    date: daysAgo(17),
+    daysAgo: 17,
     rating: 5.9,
     title: "Some facilities need attention",
     text: "The air conditioning was noisy overnight and the room could use maintenance.",
@@ -118,7 +111,7 @@ export const demoReviews: Review[] = [
     propertyId: "central-sydney",
     guest: "Avery",
     country: "Australia",
-    date: daysAgo(3),
+    daysAgo: 3,
     rating: 7.8,
     title: "A tidy base for the city",
     text: "The room was tidy and the train station was close. The bed was a little firm for us.",
@@ -131,7 +124,7 @@ export const demoReviews: Review[] = [
     propertyId: "central-sydney",
     guest: "Drew",
     country: "United Kingdom",
-    date: daysAgo(8),
+    daysAgo: 8,
     rating: 8.9,
     title: "Friendly and straightforward",
     text: "Staff were lovely and check-in was quick. We could walk to restaurants and trains.",
@@ -144,7 +137,7 @@ export const demoReviews: Review[] = [
     propertyId: "central-sydney",
     guest: "Quinn",
     country: "New Zealand",
-    date: daysAgo(13),
+    daysAgo: 13,
     rating: 5.5,
     title: "Cleanliness needs improvement",
     text: "The bathroom was not as clean as expected when we arrived.",
@@ -157,7 +150,7 @@ export const demoReviews: Review[] = [
     propertyId: "central-sydney",
     guest: "Robin",
     country: "Singapore",
-    date: daysAgo(18),
+    daysAgo: 18,
     rating: 9.0,
     title: "Easy to explore from here",
     text: "A great location for exploring the city and the team were helpful with directions.",
@@ -170,7 +163,7 @@ export const demoReviews: Review[] = [
     propertyId: "darling-harbour",
     guest: "Harper",
     country: "Australia",
-    date: daysAgo(1),
+    daysAgo: 1,
     rating: 6.5,
     title: "Convenient, but the room felt small",
     text: "The location was handy, although the room felt smaller than we expected.",
@@ -183,7 +176,7 @@ export const demoReviews: Review[] = [
     propertyId: "darling-harbour",
     guest: "Finley",
     country: "United States",
-    date: daysAgo(7),
+    daysAgo: 7,
     rating: 9.2,
     title: "A warm welcome",
     text: "Check-in was simple and the staff made us feel welcome from the moment we arrived.",
@@ -196,7 +189,7 @@ export const demoReviews: Review[] = [
     propertyId: "darling-harbour",
     guest: "Emerson",
     country: "India",
-    date: daysAgo(12),
+    daysAgo: 12,
     rating: 5.8,
     title: "The room needed a deeper clean",
     text: "The room needed a deeper clean, especially around the bathroom fixtures.",
@@ -209,7 +202,7 @@ export const demoReviews: Review[] = [
     propertyId: "darling-harbour",
     guest: "Parker",
     country: "Canada",
-    date: daysAgo(20),
+    daysAgo: 20,
     rating: 8.5,
     title: "Helpful staff and good facilities",
     text: "Staff quickly brought an extra towel and the facilities worked well for our weekend.",
@@ -218,3 +211,12 @@ export const demoReviews: Review[] = [
     source: "demo",
   },
 ];
+
+export function createDemoReviews(referenceDate: Date): Review[] {
+  return demoReviewSeeds.map(({ daysAgo, ...review }) => {
+    const date = new Date(referenceDate.getTime());
+    date.setUTCHours(12, 0, 0, 0);
+    date.setUTCDate(date.getUTCDate() - daysAgo);
+    return { ...review, date: date.toISOString().slice(0, 10) };
+  });
+}
