@@ -11,6 +11,7 @@ import {
   CircleHelp,
   ClipboardList,
   Compass,
+  Download,
   ExternalLink,
   FileSpreadsheet,
   Filter,
@@ -20,6 +21,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Star,
+  Tag,
   ThumbsDown,
   ThumbsUp,
   Upload,
@@ -30,12 +32,13 @@ import { createDemoReviews } from "@/data/demo-reviews";
 import { properties } from "@/data/properties";
 import {
   getPropertyWeeklyRatings,
+  classifyTopics,
   getSentiment,
   getTopicShares,
   getWeeklySentimentTrend,
   getWeeklySummary,
 } from "@/lib/analytics";
-import type { Review, Sentiment } from "@/lib/types";
+import type { Review, ReviewTopic, Sentiment } from "@/lib/types";
 
 type ViewName = "Overview" | "Reviews" | "Properties" | "Insights";
 type SentimentFilter = "all" | Sentiment;
@@ -85,6 +88,7 @@ function SentimentBadge({ rating }: { rating: number }) {
 function ReviewRow({ review }: { review: Review }) {
   const property = properties.find((item) => item.id === review.propertyId);
   const tone = ratingTone(review.rating);
+  const topics = classifyTopics(review.text);
 
   return (
     <article className="review-row">
@@ -102,6 +106,7 @@ function ReviewRow({ review }: { review: Review }) {
           <span><Building2 size={12} /> {property?.name ?? "Unknown property"}</span>
           <span><CalendarDays size={12} /> {formatDate(review.date)}</span>
         </div>
+        {topics.length > 0 && <div className="review-topic-tags">{topics.slice(0, 3).map((topic) => <span key={topic}>{topic}</span>)}</div>}
       </div>
       <SentimentBadge rating={review.rating} />
     </article>
@@ -273,6 +278,7 @@ function ReviewsView({ reviews, source }: { reviews: Review[]; source: "demo" | 
   const [search, setSearch] = useState("");
   const [propertyFilter, setPropertyFilter] = useState("all");
   const [sentimentFilter, setSentimentFilter] = useState<SentimentFilter>("all");
+  const [topicFilter, setTopicFilter] = useState<ReviewTopic | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest" | "rating">("newest");
@@ -281,24 +287,57 @@ function ReviewsView({ reviews, source }: { reviews: Review[]; source: "demo" | 
     const matchesText = !search || `${review.title} ${review.text} ${review.guest}`.toLowerCase().includes(search.toLowerCase());
     const matchesProperty = propertyFilter === "all" || review.propertyId === propertyFilter;
     const matchesSentiment = sentimentFilter === "all" || getSentiment(review.rating) === sentimentFilter;
-    return matchesText && matchesProperty && matchesSentiment && (!dateFrom || review.date >= dateFrom) && (!dateTo || review.date <= dateTo);
-  }).sort((left, right) => sort === "oldest" ? left.date.localeCompare(right.date) : sort === "rating" ? right.rating - left.rating : right.date.localeCompare(left.date)), [reviews, search, propertyFilter, sentimentFilter, dateFrom, dateTo, sort]);
+    const matchesTopic = topicFilter === "all" || classifyTopics(review.text).includes(topicFilter);
+    return matchesText && matchesProperty && matchesSentiment && matchesTopic && (!dateFrom || review.date >= dateFrom) && (!dateTo || review.date <= dateTo);
+  }).sort((left, right) => sort === "oldest" ? left.date.localeCompare(right.date) : sort === "rating" ? right.rating - left.rating : right.date.localeCompare(left.date)), [reviews, search, propertyFilter, sentimentFilter, topicFilter, dateFrom, dateTo, sort]);
+
+  function exportCsv() {
+    const headers = ["property", "review_id", "date", "rating", "sentiment", "guest", "country", "title", "review_text", "topics", "travel_type", "language", "source_url"];
+    const rows = filtered.map((review) => {
+      const property = properties.find((item) => item.id === review.propertyId);
+      return [
+        property?.name ?? review.propertyId,
+        review.externalReviewId ?? review.id,
+        review.date,
+        review.rating.toFixed(1),
+        getSentiment(review.rating),
+        review.guest,
+        review.country,
+        review.title,
+        review.text,
+        classifyTopics(review.text).join("; "),
+        review.travelType,
+        review.language,
+        review.sourceUrl ?? property?.listingUrl ?? "",
+      ];
+    });
+    const escapeCell = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const contents = [headers, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
+    const file = new Blob([`\uFEFF${contents}`], { type: "text/csv;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = `azzurro-reviews-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
 
   return (
     <>
       <div className="page-heading-row">
         <div><div className="eyebrow">OPERATIONS / REVIEWS</div><h1>Review inbox</h1><p className="page-description">Search and filter guest feedback across your properties.</p></div>
-        <div className="review-total"><strong>{filtered.length}</strong><span>{filtered.length === 1 ? "review" : "reviews"}</span></div>
+        <div className="review-heading-actions"><div className="review-total"><strong>{filtered.length}</strong><span>{filtered.length === 1 ? "review" : "reviews"}</span></div><button className="export-button" onClick={exportCsv} disabled={filtered.length === 0}><Download size={14} /> Export CSV</button></div>
       </div>
       <section className="panel reviews-panel">
         <div className="filter-toolbar">
           <label className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reviews or guest names" /></label>
           <label className="filter-select"><Building2 size={14} /><select value={propertyFilter} onChange={(event) => setPropertyFilter(event.target.value)}><option value="all">All properties</option>{properties.map((property) => <option value={property.id} key={property.id}>{property.name}</option>)}</select><ChevronDown size={14} /></label>
           <label className="filter-select"><Filter size={14} /><select value={sentimentFilter} onChange={(event) => setSentimentFilter(event.target.value as SentimentFilter)}><option value="all">All sentiment</option><option value="positive">Positive</option><option value="neutral">Neutral</option><option value="negative">Negative</option></select><ChevronDown size={14} /></label>
+          <label className="filter-select"><Tag size={14} /><select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value as ReviewTopic | "all")}><option value="all">All topics</option>{["Cleanliness", "Check-in", "Staff", "Noise", "Facilities", "Location", "Room condition", "Value for money"].map((topic) => <option key={topic} value={topic}>{topic}</option>)}</select><ChevronDown size={14} /></label>
           <label className="filter-select sort-select"><SlidersHorizontal size={14} /><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="rating">Highest rating</option></select><ChevronDown size={14} /></label>
         </div>
         <div className="date-filter-row"><span>Date range</span><input aria-label="Start date" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /><span>to</span><input aria-label="End date" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          {(dateFrom || dateTo || search || propertyFilter !== "all" || sentimentFilter !== "all") && <button className="reset-button" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setPropertyFilter("all"); setSentimentFilter("all"); }}>Clear filters</button>}
+          {(dateFrom || dateTo || search || propertyFilter !== "all" || sentimentFilter !== "all" || topicFilter !== "all") && <button className="reset-button" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setPropertyFilter("all"); setSentimentFilter("all"); setTopicFilter("all"); }}>Clear filters</button>}
         </div>
         <div className="review-list">{filtered.length ? filtered.map((review) => <ReviewRow key={review.id} review={review} />) : <div className="empty-state"><span className="empty-icon"><Search size={18} /></span><strong>No reviews match those filters</strong><p>Try changing the property, dates or search terms.</p></div>}</div>
       </section>
