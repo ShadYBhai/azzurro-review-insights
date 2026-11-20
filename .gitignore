@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+/data/imported-reviews.json
+/data/.imported-reviews-*.tmp
 
 # debug
 npm-debug.log*

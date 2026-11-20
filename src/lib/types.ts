@@ -18,6 +18,7 @@ export type Review = {
   language: string;
   source: "demo" | "import";
   externalReviewId?: string;
+  sourceUrl?: string;
 };
 
 export type Sentiment = "positive" | "neutral" | "negative";

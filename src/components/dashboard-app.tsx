@@ -150,11 +150,13 @@ function Overview({
   selectedProperty,
   reviews,
   now,
+  source,
   onOpenReviews,
 }: {
   selectedProperty: string;
   reviews: Review[];
   now: Date;
+  source: "demo" | "import";
   onOpenReviews: () => void;
 }) {
   const summary = getWeeklySummary(reviews, now);
@@ -258,12 +260,12 @@ function Overview({
           {[...reviews].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4).map((review) => <ReviewRow key={review.id} review={review} />)}
         </div>
       </section>
-      <div className="data-provenance"><span className="demo-dot" /> Sample workspace · review examples are fictional and for interface demonstration only</div>
+      <div className="data-provenance"><span className="demo-dot" />{source === "demo" ? "Sample workspace · review examples are fictional and for interface demonstration only" : "Imported review data · loaded from the local authorized CSV dataset"}</div>
     </>
   );
 }
 
-function ReviewsView({ reviews }: { reviews: Review[] }) {
+function ReviewsView({ reviews, source }: { reviews: Review[]; source: "demo" | "import" }) {
   const [search, setSearch] = useState("");
   const [propertyFilter, setPropertyFilter] = useState("all");
   const [sentimentFilter, setSentimentFilter] = useState<SentimentFilter>("all");
@@ -296,12 +298,12 @@ function ReviewsView({ reviews }: { reviews: Review[] }) {
         </div>
         <div className="review-list">{filtered.length ? filtered.map((review) => <ReviewRow key={review.id} review={review} />) : <div className="empty-state"><span className="empty-icon"><Search size={18} /></span><strong>No reviews match those filters</strong><p>Try changing the property, dates or search terms.</p></div>}</div>
       </section>
-      <div className="data-provenance"><span className="demo-dot" /> Sample workspace · review examples are fictional and for interface demonstration only</div>
+      <div className="data-provenance"><span className="demo-dot" />{source === "demo" ? "Sample workspace · review examples are fictional and for interface demonstration only" : "Imported review data · loaded from the local authorized CSV dataset"}</div>
     </>
   );
 }
 
-function PropertiesView({ reviews, now }: { reviews: Review[]; now: Date }) {
+function PropertiesView({ reviews, now, source }: { reviews: Review[]; now: Date; source: "demo" | "import" }) {
   const stats = getPropertyWeeklyRatings(reviews, now);
   const summary = getWeeklySummary(reviews, now);
 
@@ -324,12 +326,12 @@ function PropertiesView({ reviews, now }: { reviews: Review[]; now: Date }) {
           );
         })}
       </div>
-      <div className="data-provenance"><span className="demo-dot" /> Weekly statistics use fictional sample reviews.</div>
+      <div className="data-provenance"><span className="demo-dot" />{source === "demo" ? "Weekly statistics use fictional sample reviews." : "Weekly statistics use imported review data."}</div>
     </>
   );
 }
 
-function InsightsView({ reviews, now }: { reviews: Review[]; now: Date }) {
+function InsightsView({ reviews, now, source }: { reviews: Review[]; now: Date; source: "demo" | "import" }) {
   const summary = getWeeklySummary(reviews, now);
   const currentReviews = reviews.filter((review) => review.date >= summary.ranges.current.start && review.date <= summary.ranges.current.end);
   const negativeReviews = currentReviews.filter((review) => getSentiment(review.rating) === "negative");
@@ -343,7 +345,7 @@ function InsightsView({ reviews, now }: { reviews: Review[]; now: Date }) {
       <section className="panel insight-list-panel"><div className="panel-heading"><div><h2>Negative review topics</h2><p>A review may mention more than one topic.</p></div></div>{topics.length ? <div className="insight-topic-list">{topics.map((topic) => <div className="insight-topic" key={topic.topic}><div className="insight-topic-heading"><div><span className="topic-rank">{String(topics.indexOf(topic) + 1).padStart(2, "0")}</span><strong>{topic.topic}</strong></div><span>{topic.count} {topic.count === 1 ? "review" : "reviews"}</span></div><div className="topic-track"><span style={{ width: `${Math.max(4, topic.share * 100)}%` }} /></div><small>{Math.round(topic.share * 100)}% of negative reviews this week</small></div>)}</div> : null}</section>
       <section className="panel recent-panel"><div className="panel-heading"><div><h2>Reviews behind the signals</h2><p>Read the guest comments included in this week’s analysis.</p></div></div>{negativeReviews.length ? <div className="recent-review-list">{negativeReviews.map((review) => <ReviewRow key={review.id} review={review} />)}</div> : <div className="empty-state compact"><strong>No negative reviews this week</strong></div>}</section>
       <p className="method-note"><CircleHelp size={15} /> Topic tagging uses keyword rules and can miss context, sarcasm, spelling variations and languages other than English.</p>
-      <div className="data-provenance"><span className="demo-dot" /> Sample workspace · insights are illustrative, not operational findings</div>
+      <div className="data-provenance"><span className="demo-dot" />{source === "demo" ? "Sample workspace · insights are illustrative, not operational findings" : "Imported review data · topic tags are keyword-based estimates"}</div>
     </>
   );
 }
@@ -351,15 +353,28 @@ function InsightsView({ reviews, now }: { reviews: Review[]; now: Date }) {
 export default function DashboardApp() {
   const [view, setView] = useState<ViewName>("Overview");
   const [selectedProperty, setSelectedProperty] = useState("all");
-  const [workspace, setWorkspace] = useState<{ now: Date; reviews: Review[] } | null>(null);
+  const [workspace, setWorkspace] = useState<{ now: Date; reviews: Review[]; source: "demo" | "import" } | null>(null);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const current = new Date();
-      setWorkspace({ now: current, reviews: createDemoReviews(current) });
+      setWorkspace({ now: current, reviews: createDemoReviews(current), source: "demo" });
+      fetch("/api/reviews", { cache: "no-store" })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Local review data is unavailable");
+          return response.json() as Promise<{ reviews?: Review[] }>;
+        })
+        .then((data) => {
+          if (Array.isArray(data.reviews) && data.reviews.length > 0) {
+            setWorkspace({ now: current, reviews: data.reviews, source: "import" });
+          }
+        })
+        .catch(() => setDataNotice("Could not load the local import file. Showing fictional examples instead."));
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
   const referenceDate = workspace?.now;
+  const source = workspace?.source ?? "demo";
   const scopedReviews = useMemo(() => {
     const allReviews = workspace?.reviews ?? [];
     return selectedProperty === "all" ? allReviews : allReviews.filter((review) => review.propertyId === selectedProperty);
@@ -384,7 +399,7 @@ export default function DashboardApp() {
         <div className="sidebar-section-label property-nav-label">YOUR PROPERTIES <span>{properties.length}</span></div>
         <div className="sidebar-properties">{properties.map((property, index) => <button key={property.id} onClick={() => { setSelectedProperty(property.id); setView("Overview"); }}><span className={`property-nav-dot dot-${index + 1}`} />{property.name}</button>)}</div>
         <div className="sidebar-bottom">
-          <div className="data-source-card"><span className="live-dot" /><div><strong>Demo workspace</strong><small>Sample review data</small></div></div>
+        <div className="data-source-card"><span className="live-dot" /><div><strong>{source === "demo" ? "Demo workspace" : "Imported reviews"}</strong><small>{source === "demo" ? "Sample review data" : "Local CSV dataset"}</small></div></div>
           <button className="sidebar-help"><CircleHelp size={16} /> Help &amp; guidance <ChevronRight size={14} /></button>
           <div className="user-card"><span className="user-avatar">AM</span><span><strong>Alex Morgan</strong><small>Operations manager</small></span><ChevronDown size={15} /></div>
         </div>
@@ -400,10 +415,11 @@ export default function DashboardApp() {
           </div>
         </header>
         <div className="content-area">
-          {view === "Overview" && <Overview selectedProperty={selectedProperty} reviews={scopedReviews} now={referenceDate} onOpenReviews={() => setView("Reviews")} />}
-          {view === "Reviews" && <ReviewsView reviews={scopedReviews} />}
-          {view === "Properties" && <PropertiesView reviews={scopedReviews} now={referenceDate} />}
-          {view === "Insights" && <InsightsView reviews={scopedReviews} now={referenceDate} />}
+          {dataNotice && <div className="data-warning" role="status">{dataNotice}</div>}
+          {view === "Overview" && <Overview selectedProperty={selectedProperty} reviews={scopedReviews} now={referenceDate} source={source} onOpenReviews={() => setView("Reviews")} />}
+          {view === "Reviews" && <ReviewsView reviews={scopedReviews} source={source} />}
+          {view === "Properties" && <PropertiesView reviews={scopedReviews} now={referenceDate} source={source} />}
+          {view === "Insights" && <InsightsView reviews={scopedReviews} now={referenceDate} source={source} />}
           <footer className="app-footer"><span>AZZURRO REVIEW INTELLIGENCE</span><span>Designed for clearer guest experience decisions</span></footer>
         </div>
       </main>
