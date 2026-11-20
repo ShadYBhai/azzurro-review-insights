@@ -52,7 +52,7 @@ Imported records are stored locally in `data/imported-reviews.json`, which is ig
 ## Architecture
 
 - `src/app/` — Next.js App Router page, layout, and review data API route.
-- `src/components/dashboard-app.tsx` — interactive overview, review feed, property comparison, insights, filtered CSV export, and the CSV upload dialog.
+- `src/components/dashboard-app.tsx` — interactive overview, paginated review feed, property comparison, insights, filtered CSV export, and the CSV upload dialog.
 - `src/data/properties.ts` — the four property names and listing links.
 - `src/data/demo-reviews.ts` — fictional review examples for the interface.
 - `src/lib/analytics.ts` — Sydney Monday-to-Sunday week ranges, ratings, sentiment, and topic rules.

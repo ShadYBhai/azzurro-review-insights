@@ -172,6 +172,14 @@ a { color:inherit; }
 .date-filter-row input { height:27px; padding:0 7px; border:1px solid #e7ece8; border-radius:5px; color:#64736a; font-size:9px; }
 .reset-button { margin-left:auto; border:0; background:transparent; color:#55806a; font-size:9px; }
 .review-list { margin-top:2px; } .reviews-panel { margin-bottom:14px; }
+.review-pagination { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:13px; margin-top:3px; border-top:1px solid #edf1ed; color:#89958e; font-size:9px; }
+.review-pagination>span strong { color:#56685e; font-weight:700; }
+.pagination-controls { display:flex; align-items:center; gap:8px; }
+.pagination-controls label { display:flex; align-items:center; gap:5px; margin-right:4px; }
+.pagination-controls select { padding:4px 5px; border:1px solid #e5ebe6; border-radius:5px; background:#fff; color:#56665c; font-size:9px; }
+.pagination-controls>button { display:grid; width:27px; height:27px; place-items:center; border:1px solid #e5ebe6; border-radius:5px; background:#fff; color:#607368; }
+.pagination-controls>button:disabled { cursor:not-allowed; color:#bac3bd; background:#f8faf8; }
+.pagination-controls>span { color:#738078; font-size:8px; white-space:nowrap; }
 .property-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-bottom:17px; }
 .property-card { padding:18px; }
 .property-card-top { display:flex; align-items:center; justify-content:space-between; }
@@ -272,6 +280,8 @@ a { color:inherit; }
   .review-score { width:31px; height:31px; font-size:12px; }
   .review-row>.sentiment-badge { gap:0; padding:6px; font-size:0; } .review-row>.sentiment-badge svg { width:13px; height:13px; }
   .review-bottomline { gap:7px; }
+  .review-pagination { align-items:flex-start; flex-direction:column; }
+  .pagination-controls { align-self:stretch; justify-content:flex-end; }
   .insight-callout { align-items:flex-start; padding:17px 14px; } .insight-callout h2 { max-width:230px; font-size:18px; }
   .callout-art { right:8px; width:58px; } .app-footer { gap:10px; font-size:7px; }
   .app-footer span:last-child { max-width:130px; text-align:right; }

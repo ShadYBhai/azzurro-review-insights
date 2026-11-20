@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   Building2,
   CalendarDays,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
@@ -282,6 +283,8 @@ function ReviewsView({ reviews, source }: { reviews: Review[]; source: "demo" | 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest" | "rating">("newest");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(8);
 
   const filtered = useMemo(() => reviews.filter((review) => {
     const matchesText = !search || `${review.title} ${review.text} ${review.guest}`.toLowerCase().includes(search.toLowerCase());
@@ -290,6 +293,11 @@ function ReviewsView({ reviews, source }: { reviews: Review[]; source: "demo" | 
     const matchesTopic = topicFilter === "all" || classifyTopics(review.text).includes(topicFilter);
     return matchesText && matchesProperty && matchesSentiment && matchesTopic && (!dateFrom || review.date >= dateFrom) && (!dateTo || review.date <= dateTo);
   }).sort((left, right) => sort === "oldest" ? left.date.localeCompare(right.date) : sort === "rating" ? right.rating - left.rating : right.date.localeCompare(left.date)), [reviews, search, propertyFilter, sentimentFilter, topicFilter, dateFrom, dateTo, sort]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visiblePage = Math.min(page, pageCount);
+  const pageReviews = filtered.slice((visiblePage - 1) * pageSize, visiblePage * pageSize);
+  const firstVisible = filtered.length ? (visiblePage - 1) * pageSize + 1 : 0;
+  const lastVisible = Math.min(visiblePage * pageSize, filtered.length);
 
   function exportCsv() {
     const headers = ["property", "review_id", "date", "rating", "sentiment", "guest", "country", "title", "review_text", "topics", "travel_type", "language", "source_url"];
@@ -326,20 +334,21 @@ function ReviewsView({ reviews, source }: { reviews: Review[]; source: "demo" | 
     <>
       <div className="page-heading-row">
         <div><div className="eyebrow">OPERATIONS / REVIEWS</div><h1>Review inbox</h1><p className="page-description">Search and filter guest feedback across your properties.</p></div>
-        <div className="review-heading-actions"><div className="review-total"><strong>{filtered.length}</strong><span>{filtered.length === 1 ? "review" : "reviews"}</span></div><button className="export-button" onClick={exportCsv} disabled={filtered.length === 0}><Download size={14} /> Export CSV</button></div>
+        <div className="review-heading-actions"><div className="review-total"><strong>{filtered.length}</strong><span>{filtered.length === 1 ? "review" : "reviews"}</span></div><button className="export-button" onClick={exportCsv} disabled={filtered.length === 0} title="Export all reviews matching the current filters"><Download size={14} /> Export filtered CSV</button></div>
       </div>
       <section className="panel reviews-panel">
         <div className="filter-toolbar">
-          <label className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search reviews or guest names" /></label>
-          <label className="filter-select"><Building2 size={14} /><select value={propertyFilter} onChange={(event) => setPropertyFilter(event.target.value)}><option value="all">All properties</option>{properties.map((property) => <option value={property.id} key={property.id}>{property.name}</option>)}</select><ChevronDown size={14} /></label>
-          <label className="filter-select"><Filter size={14} /><select value={sentimentFilter} onChange={(event) => setSentimentFilter(event.target.value as SentimentFilter)}><option value="all">All sentiment</option><option value="positive">Positive</option><option value="neutral">Neutral</option><option value="negative">Negative</option></select><ChevronDown size={14} /></label>
-          <label className="filter-select"><Tag size={14} /><select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value as ReviewTopic | "all")}><option value="all">All topics</option>{["Cleanliness", "Check-in", "Staff", "Noise", "Facilities", "Location", "Room condition", "Value for money"].map((topic) => <option key={topic} value={topic}>{topic}</option>)}</select><ChevronDown size={14} /></label>
+          <label className="search-field"><Search size={16} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search reviews or guest names" /></label>
+          <label className="filter-select"><Building2 size={14} /><select value={propertyFilter} onChange={(event) => { setPropertyFilter(event.target.value); setPage(1); }}><option value="all">All properties</option>{properties.map((property) => <option value={property.id} key={property.id}>{property.name}</option>)}</select><ChevronDown size={14} /></label>
+          <label className="filter-select"><Filter size={14} /><select value={sentimentFilter} onChange={(event) => { setSentimentFilter(event.target.value as SentimentFilter); setPage(1); }}><option value="all">All sentiment</option><option value="positive">Positive</option><option value="neutral">Neutral</option><option value="negative">Negative</option></select><ChevronDown size={14} /></label>
+          <label className="filter-select"><Tag size={14} /><select value={topicFilter} onChange={(event) => { setTopicFilter(event.target.value as ReviewTopic | "all"); setPage(1); }}><option value="all">All topics</option>{["Cleanliness", "Check-in", "Staff", "Noise", "Facilities", "Location", "Room condition", "Value for money"].map((topic) => <option key={topic} value={topic}>{topic}</option>)}</select><ChevronDown size={14} /></label>
           <label className="filter-select sort-select"><SlidersHorizontal size={14} /><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="rating">Highest rating</option></select><ChevronDown size={14} /></label>
         </div>
-        <div className="date-filter-row"><span>Date range</span><input aria-label="Start date" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /><span>to</span><input aria-label="End date" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          {(dateFrom || dateTo || search || propertyFilter !== "all" || sentimentFilter !== "all" || topicFilter !== "all") && <button className="reset-button" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setPropertyFilter("all"); setSentimentFilter("all"); setTopicFilter("all"); }}>Clear filters</button>}
+        <div className="date-filter-row"><span>Date range</span><input aria-label="Start date" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} /><span>to</span><input aria-label="End date" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} />
+          {(dateFrom || dateTo || search || propertyFilter !== "all" || sentimentFilter !== "all" || topicFilter !== "all") && <button className="reset-button" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setPropertyFilter("all"); setSentimentFilter("all"); setTopicFilter("all"); setPage(1); }}>Clear filters</button>}
         </div>
-        <div className="review-list">{filtered.length ? filtered.map((review) => <ReviewRow key={review.id} review={review} />) : <div className="empty-state"><span className="empty-icon"><Search size={18} /></span><strong>No reviews match those filters</strong><p>Try changing the property, dates or search terms.</p></div>}</div>
+        <div className="review-list">{filtered.length ? pageReviews.map((review) => <ReviewRow key={review.id} review={review} />) : <div className="empty-state"><span className="empty-icon"><Search size={18} /></span><strong>No reviews match those filters</strong><p>Try changing the property, dates or search terms.</p></div>}</div>
+        {filtered.length > 0 && <div className="review-pagination"><span>Showing <strong>{firstVisible}–{lastVisible}</strong> of {filtered.length}</span><div className="pagination-controls"><label>Rows <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={8}>8</option><option value={16}>16</option><option value={32}>32</option></select></label><button aria-label="Previous page" disabled={visiblePage <= 1} onClick={() => setPage(visiblePage - 1)}><ChevronLeft size={15} /></button><span>Page {visiblePage} of {pageCount}</span><button aria-label="Next page" disabled={visiblePage >= pageCount} onClick={() => setPage(visiblePage + 1)}><ChevronRight size={15} /></button></div></div>}
       </section>
       <div className="data-provenance"><span className="demo-dot" />{source === "demo" ? "Sample workspace · review examples are fictional and for interface demonstration only" : "Imported review data · loaded from the local authorized CSV dataset"}</div>
     </>
