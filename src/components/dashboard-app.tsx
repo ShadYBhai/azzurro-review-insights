@@ -7,10 +7,12 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  CheckCircle2,
   CircleHelp,
   ClipboardList,
   Compass,
   ExternalLink,
+  FileSpreadsheet,
   Filter,
   LayoutDashboard,
   MessageSquareText,
@@ -20,6 +22,8 @@ import {
   Star,
   ThumbsDown,
   ThumbsUp,
+  Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createDemoReviews } from "@/data/demo-reviews";
@@ -350,11 +354,80 @@ function InsightsView({ reviews, now, source }: { reviews: Review[]; now: Date; 
   );
 }
 
+type ImportReport = { added: number; updated: number; duplicateRows: number; total: number };
+
+function ImportReviewsDialog({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [issues, setIssues] = useState<Array<{ row: number; message: string }>>([]);
+  const [report, setReport] = useState<ImportReport | null>(null);
+
+  async function submitImport() {
+    if (!file) {
+      setError("Choose a CSV file first.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setIssues([]);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/reviews", { method: "POST", body });
+      const result = await response.json() as { error?: string; issues?: Array<{ row: number; message: string }>; report?: ImportReport };
+      if (!response.ok || !result.report) {
+        setError(result.error ?? "The import could not be completed.");
+        setIssues(result.issues ?? []);
+        return;
+      }
+
+      setReport(result.report);
+      await onImported();
+    } catch {
+      setError("Could not reach the local review service. Try again when the app is running.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-dialog-title">
+        <div className="dialog-heading">
+          <div className="dialog-title-icon"><FileSpreadsheet size={19} /></div>
+          <div><h2 id="import-dialog-title">Import review data</h2><p>Upload an authorized CSV export for these properties.</p></div>
+          <button className="dialog-close" onClick={onClose} aria-label="Close import dialog"><X size={18} /></button>
+        </div>
+        {report ? <div className="import-success">
+          <span className="success-icon"><CheckCircle2 size={22} /></span>
+          <h3>Import complete</h3>
+          <p>{report.added} added · {report.updated} updated · {report.duplicateRows} duplicate rows skipped</p>
+          <button className="import-primary" onClick={onClose}>Done</button>
+        </div> : <>
+          <label className={`upload-dropzone ${file ? "has-file" : ""}`} htmlFor="review-csv-file">
+            <span className="upload-icon"><Upload size={19} /></span>
+            <strong>{file ? file.name : "Choose a CSV file"}</strong>
+            <small>{file ? `${(file.size / 1024).toFixed(0)} KB · CSV` : "CSV only · Maximum file size 5 MB"}</small>
+            <input id="review-csv-file" type="file" accept=".csv,text/csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(""); setIssues([]); }} />
+          </label>
+          <a className="template-download" href="/api/review-template"><FileSpreadsheet size={14} /> Download the CSV template</a>
+          <p className="import-guidance">The file is checked before it is saved. If any row is invalid, the import is cancelled and existing data stays unchanged.</p>
+          {error && <div className="import-error" role="alert"><strong>{error}</strong>{issues.length > 0 && <ul>{issues.slice(0, 8).map((issue, index) => <li key={`${issue.row}-${index}`}>Row {issue.row}: {issue.message}</li>)}</ul>}</div>}
+          <div className="dialog-actions"><button className="import-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="import-primary" onClick={submitImport} disabled={busy || !file}>{busy ? "Checking file…" : "Import reviews"}</button></div>
+        </>}
+      </section>
+    </div>
+  );
+}
+
 export default function DashboardApp() {
   const [view, setView] = useState<ViewName>("Overview");
   const [selectedProperty, setSelectedProperty] = useState("all");
   const [workspace, setWorkspace] = useState<{ now: Date; reviews: Review[]; source: "demo" | "import" } | null>(null);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const current = new Date();
@@ -384,6 +457,16 @@ export default function DashboardApp() {
     return <div className="dashboard-loading"><span className="brand-mark"><span /></span><p>Preparing your review workspace…</p></div>;
   }
 
+  async function refreshImportedReviews() {
+    const response = await fetch("/api/reviews", { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not refresh imported reviews");
+    const data = await response.json() as { reviews?: Review[] };
+    if (Array.isArray(data.reviews) && data.reviews.length > 0) {
+      setWorkspace({ now: new Date(), reviews: data.reviews, source: "import" });
+      setDataNotice(null);
+    }
+  }
+
   return (
     <div className="app-frame">
       <aside className="sidebar">
@@ -409,7 +492,8 @@ export default function DashboardApp() {
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{view}</strong></div>
           <div className="topbar-controls">
-            <span className="demo-status"><i /> DEMO DATA</span>
+            <button className="import-open-button" onClick={() => setImportOpen(true)}><Upload size={14} /><span>Import reviews</span></button>
+            <span className={`demo-status ${source === "import" ? "imported" : ""}`}><i /> {source === "demo" ? "DEMO DATA" : "IMPORTED DATA"}</span>
             <label className="top-property-select"><Building2 size={15} /><select aria-label="Filter dashboard by property" value={selectedProperty} onChange={(event) => setSelectedProperty(event.target.value)}><option value="all">All properties</option>{properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select><ChevronDown size={14} /></label>
             <button className="topbar-avatar" aria-label="User profile">AM</button>
           </div>
@@ -423,6 +507,7 @@ export default function DashboardApp() {
           <footer className="app-footer"><span>AZZURRO REVIEW INTELLIGENCE</span><span>Designed for clearer guest experience decisions</span></footer>
         </div>
       </main>
+      {importOpen && <ImportReviewsDialog onClose={() => setImportOpen(false)} onImported={refreshImportedReviews} />}
     </div>
   );
 }

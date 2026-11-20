@@ -1,11 +1,37 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Review } from "@/lib/types";
 import { reviewListSchema } from "@/lib/validations/review";
 
 const dataDirectory = path.join(process.cwd(), "data");
 const dataFile = path.join(dataDirectory, "imported-reviews.json");
+const lockFile = path.join(dataDirectory, ".imported-reviews.lock");
+const staleLockMs = 15 * 60 * 1000;
+
+async function acquireWriteLock() {
+  await mkdir(dataDirectory, { recursive: true });
+  try {
+    return await open(lockFile, "wx");
+  } catch (error) {
+    if (!error || typeof error !== "object" || !("code" in error) || error.code !== "EEXIST") throw error;
+  }
+
+  try {
+    const lockStats = await stat(lockFile);
+    if (Date.now() - lockStats.mtimeMs > staleLockMs) {
+      await rm(lockFile, { force: true });
+      return await open(lockFile, "wx");
+    }
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return await open(lockFile, "wx");
+    }
+    throw error;
+  }
+
+  throw new Error("Another review import is already updating the local dataset. Try again shortly.");
+}
 
 function reviewKey(review: Review): string {
   const property = review.propertyId.trim().toLowerCase();
@@ -32,38 +58,42 @@ export async function readImportedReviews(): Promise<Review[]> {
 }
 
 export async function mergeImportedReviews(incoming: Review[]) {
-  const existing = await readImportedReviews();
-  const merged = new Map(existing.map((review) => [reviewKey(review), review]));
-  const seenInFile = new Set<string>();
-  let added = 0;
-  let updated = 0;
-  let duplicateRows = 0;
-
-  for (const review of incoming) {
-    const key = reviewKey(review);
-    if (seenInFile.has(key)) {
-      duplicateRows += 1;
-      continue;
-    }
-    seenInFile.add(key);
-
-    const current = merged.get(key);
-    merged.set(key, { ...review, id: current?.id ?? stableId(key), source: "import" });
-    if (current) updated += 1;
-    else added += 1;
-  }
-
-  const records = [...merged.values()];
-  await mkdir(dataDirectory, { recursive: true });
-  const temporaryFile = path.join(dataDirectory, `.imported-reviews-${randomUUID()}.tmp`);
-
+  const lock = await acquireWriteLock();
   try {
-    await writeFile(temporaryFile, `${JSON.stringify(records, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-    await rename(temporaryFile, dataFile);
-  } catch (error) {
-    await rm(temporaryFile, { force: true });
-    throw error;
-  }
+    const existing = await readImportedReviews();
+    const merged = new Map(existing.map((review) => [reviewKey(review), review]));
+    const seenInFile = new Set<string>();
+    let added = 0;
+    let updated = 0;
+    let duplicateRows = 0;
 
-  return { added, updated, duplicateRows, total: records.length };
+    for (const review of incoming) {
+      const key = reviewKey(review);
+      if (seenInFile.has(key)) {
+        duplicateRows += 1;
+        continue;
+      }
+      seenInFile.add(key);
+
+      const current = merged.get(key);
+      merged.set(key, { ...review, id: current?.id ?? stableId(key), source: "import" });
+      if (current) updated += 1;
+      else added += 1;
+    }
+
+    const records = [...merged.values()];
+    const temporaryFile = path.join(dataDirectory, `.imported-reviews-${randomUUID()}.tmp`);
+    try {
+      await writeFile(temporaryFile, `${JSON.stringify(records, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      await rename(temporaryFile, dataFile);
+    } catch (error) {
+      await rm(temporaryFile, { force: true });
+      throw error;
+    }
+
+    return { added, updated, duplicateRows, total: records.length };
+  } finally {
+    await lock.close();
+    await rm(lockFile, { force: true });
+  }
 }

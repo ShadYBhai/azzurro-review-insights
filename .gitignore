@@ -24,6 +24,7 @@
 .DS_Store
 *.pem
 /data/imported-reviews.json
+/data/.imported-reviews.lock
 /data/.imported-reviews-*.tmp
 
 # debug
